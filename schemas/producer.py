@@ -7,33 +7,35 @@ cnpj_validator = CNPJ()
 
 
 class CropInput(BaseModel):
-    season: str = Field(..., example="2023/2024")
-    name: str = Field(..., example="Soja")
+    id: int | None = None
+    season: str
+    name: str
 
-
-class FarmInput(BaseModel):
-    name: str = Field(..., example="Fazenda Santa Maria")
-    city: str = Field(..., example="Ribeirão Preto")
-    state: str = Field(..., example="SP")
-    total_area: float = Field(..., gt=0, example=150.0)
-    agricultural_area: float = Field(..., ge=0, example=90.0)
-    vegetation_area: float = Field(..., ge=0, example=60.0)
-    crops: List[CropInput] = Field(
-        default_factory=list,
-        example=[
-            {"season": "2023/2024", "name": "Soja"},
-            {"season": "2022/2023", "name": "Milho"},
-        ],
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": 1,
+                "season": "2023/2024",
+                "name": "Soja"
+            }
+        }
     )
 
 
-class ProducerInput(BaseModel):
-    document: str = Field(..., example="123.456.789-09")
-    name: str = Field(..., example="José da Silva")
-    farms: List[FarmInput] = Field(
-        default_factory=list,
-        example=[
-            {
+class FarmInput(BaseModel):
+    id: int | None = None
+    name: str
+    city: str
+    state: str
+    total_area: float
+    agricultural_area: float
+    vegetation_area: float
+    crops: List[CropInput] = []
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": 1,
                 "name": "Fazenda Santa Maria",
                 "city": "Ribeirão Preto",
                 "state": "SP",
@@ -41,11 +43,41 @@ class ProducerInput(BaseModel):
                 "agricultural_area": 90.0,
                 "vegetation_area": 60.0,
                 "crops": [
-                    {"season": "2023/2024", "name": "Soja"},
-                    {"season": "2022/2023", "name": "Milho"},
-                ],
+                    {"id": 1, "season": "2023/2024", "name": "Soja"},
+                    {"season": "2022/2023", "name": "Milho"}
+                ]
             }
-        ],
+        }
+    )
+
+
+class ProducerInput(BaseModel):
+    name: str
+    document: str
+    farms: Optional[List[FarmInput]] = None
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "José da Silva",
+                "document": "123.456.789-09",
+                "farms": [
+                    {
+                        "id": 1,
+                        "name": "Fazenda Santa Maria",
+                        "city": "Ribeirão Preto",
+                        "state": "SP",
+                        "total_area": 150.0,
+                        "agricultural_area": 90.0,
+                        "vegetation_area": 60.0,
+                        "crops": [
+                            {"id": 1, "season": "2023/2024", "name": "Soja"},
+                            {"season": "2022/2023", "name": "Milho"},
+                        ],
+                    }
+                ]
+            }
+        }
     )
 
     @field_validator("document")
