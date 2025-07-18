@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    container_name: brain-db
+    restart: always
+    environment:
+      POSTGRES_DB: brain_agriculture
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: brain
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./database/scripts:/docker-entrypoint-initdb.d
+    networks:
+      - brain-net
+
+  api:
+    build: .
+    container_name: brain-api
+    ports:
+      - "7000:7000"
+    env_file:
+      - .env
+    command: >
+      sh -c "poetry run uvicorn main:app --host 0.0.0.0 --port 7000"
+    depends_on:
+      - db
+    networks:
+      - brain-net
+
+networks:
+  brain-net:

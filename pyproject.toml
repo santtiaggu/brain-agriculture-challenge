@@ -1,23 +1,22 @@
-[project]
+[tool.poetry]
 name = "brain-agriculture"
 version = "0.1.0"
 description = ""
-authors = [
-    { name = "Gustavo Santiago", email = "gustavoalcantarasantiago@gmail.com" }
-]
+authors = ["Gustavo Santiago <gustavoalcantarasantiago@gmail.com>"]
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = [
-    "fastapi (>=0.116.1,<0.117.0)",
-    "uvicorn[standard] (>=0.35.0,<0.36.0)",
-    "pydantic (>=2.11.7,<3.0.0)",
-    "psycopg (>=3.2.9,<4.0.0)"
-]
 
+[tool.poetry.dependencies]
+python = ">=3.13"
+fastapi = ">=0.116.1,<0.117.0"
+uvicorn = {extras = ["standard"], version = ">=0.35.0,<0.36.0"}
+pydantic = ">=2.11.7,<3.0.0"
+python-dotenv = "^1.1.1"
+psycopg = {extras = ["binary"], version = "^3.2.9"}
+validate-docbr = "^1.11.1"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poe.tasks]
-start = "uvicorn --workers 4 --host 0.0.0.0 --port 7000 main:app"
+start = "uvicorn --workers 4 --host 0.0.0.0 --port 7001 main:app"
