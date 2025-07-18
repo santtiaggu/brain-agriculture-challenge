@@ -3,11 +3,12 @@ from fastapi import FastAPI
 from dotenv import load_dotenv
 load_dotenv()
 
-from routers import health, producer
+from routers import health, producer, dashboard
 
 app = FastAPI()
-app.include_router(health.router, prefix="/health")
-app.include_router(producer.router)
+app.include_router(health.router, prefix="/api/health")
+app.include_router(producer.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
 
 
 if __name__ == '__main__':

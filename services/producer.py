@@ -1,5 +1,5 @@
 from schemas.producer import ProducerInput
-from repositories.producer import save_producer
+from repositories.producer import save_producer, get_all_producers
 
 def create_producer(data: ProducerInput):
     # Validação: soma das áreas
@@ -11,3 +11,7 @@ def create_producer(data: ProducerInput):
     save_producer(data)
 
     return {"message": "Producer created successfully"}
+
+
+def list_producers(page: int, size: int):
+    return get_all_producers(page=page, size=size)

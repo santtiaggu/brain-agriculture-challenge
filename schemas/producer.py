@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict, field_validator
-from typing import List
+from typing import List, Optional
 from validate_docbr import CPF, CNPJ
 
 cpf_validator = CPF()
@@ -63,3 +63,34 @@ class ProducerInput(BaseModel):
         return v
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CropOutput(BaseModel):
+    id: int
+    season: str
+    name: str
+
+
+class FarmOutput(BaseModel):
+    id: int
+    name: str
+    city: str
+    state: str
+    total_area: float
+    agricultural_area: float
+    vegetation_area: float
+    crops: List[CropOutput]
+
+
+class ProducerOutput(BaseModel):
+    id: int
+    name: str
+    document: str
+    farms: List[FarmOutput]
+
+
+class ProducerListResponse(BaseModel):
+    total: int
+    page: int
+    size: int
+    producers: List[ProducerOutput]
