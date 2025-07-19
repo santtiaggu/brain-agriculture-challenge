@@ -1,7 +1,8 @@
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from schemas.producer import ProducerInput
-from repositories.producer import save_producer, get_all_producers, update_producer_in_db
+from repositories.producer import save_producer, get_all_producers, update_producer_in_db, \
+delete_producer_from_db, get_producer_by_id as fetch_producer_by_id
 
 def create_producer(data: ProducerInput):
     # Validação: soma das áreas
@@ -24,6 +25,10 @@ def list_producers(page: int, size: int):
     return get_all_producers(page=page, size=size)
 
 
+def get_producer(producer_id: int):
+    return fetch_producer_by_id(producer_id)
+
+
 def update_producer(producer_id: int, data):
     for farm in data.farms or []:
         if farm.agricultural_area + farm.vegetation_area > farm.total_area:
@@ -33,3 +38,7 @@ def update_producer(producer_id: int, data):
             )
         
     return update_producer_in_db(producer_id, data)
+
+
+def delete_producer(producer_id: int):
+    return delete_producer_from_db(producer_id)

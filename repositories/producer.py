@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from database.connection import get_connection
 from schemas.producer import ProducerInput
@@ -115,9 +116,64 @@ def get_all_producers(page: int, size: int):
     }
 
 
+def get_producer_by_id(producer_id: int):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, name, document FROM producers WHERE id = %s
+            """, (producer_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+
+            producer_id, name, document = row
+
+            # Buscar fazendas
+            cur.execute("""
+                SELECT id, name, city, state, total_area, agricultural_area, vegetation_area
+                FROM farms
+                WHERE producer_id = %s
+            """, (producer_id,))
+            farms = []
+            for farm_row in cur.fetchall():
+                farm_id, fname, city, state, total_area, agri_area, veg_area = farm_row
+
+                # Buscar culturas da fazenda
+                cur.execute("""
+                    SELECT id, season, name FROM crops WHERE farm_id = %s
+                """, (farm_id,))
+                crops = [
+                    {"id": cid, "season": season, "name": crop_name}
+                    for cid, season, crop_name in cur.fetchall()
+                ]
+
+                farms.append({
+                    "id": farm_id,
+                    "name": fname,
+                    "city": city,
+                    "state": state,
+                    "total_area": float(total_area),
+                    "agricultural_area": float(agri_area),
+                    "vegetation_area": float(veg_area),
+                    "crops": crops
+                })
+
+            return {
+                "id": producer_id,
+                "name": name,
+                "document": document,
+                "farms": farms
+            }
+
+
 def update_producer_in_db(producer_id: int, data: dict):
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # Verifica se o produtor existe antes de continuar
+            cur.execute("SELECT 1 FROM producers WHERE id = %s", (producer_id,))
+            if cur.fetchone() is None:
+                raise HTTPException(status_code=404, detail="Producer not found")
+
             # Atualizar nome e documento do produtor
             cur.execute("""
                 UPDATE producers SET name = %s, document = %s WHERE id = %s;
@@ -192,4 +248,31 @@ def update_producer_in_db(producer_id: int, data: dict):
     return JSONResponse(
         status_code=200,
         content={"message": "Producer updated successfully"}
+    )
+
+
+def delete_producer_from_db(producer_id: int):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Verifica se o produtor existe
+            cur.execute("SELECT 1 FROM producers WHERE id = %s", (producer_id,))
+            if cur.fetchone() is None:
+                raise HTTPException(status_code=404, detail="Producer not found")
+
+            # Buscar farms do produtor
+            cur.execute("SELECT id FROM farms WHERE producer_id = %s", (producer_id,))
+            farm_ids = [row[0] for row in cur.fetchall()]
+
+            # Deletar crops
+            if farm_ids:
+                cur.execute("DELETE FROM crops WHERE farm_id = ANY(%s);", (farm_ids,))
+                cur.execute("DELETE FROM farms WHERE id = ANY(%s);", (farm_ids,))
+
+            # Deletar producer
+            cur.execute("DELETE FROM producers WHERE id = %s;", (producer_id,))
+            conn.commit()
+
+    return JSONResponse(
+        status_code=200,
+        content={"message": "Producer deleted successfully"}
     )
