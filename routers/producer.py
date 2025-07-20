@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException, status
 from schemas.producer import ProducerInput, ProducerListResponse, ProducerOutput
 from schemas.pagination import PaginationInput
 from services.producer import create_producer, list_producers, update_producer, delete_producer, get_producer
-from typing import List
 
 router = APIRouter(tags=["producers"])
 
