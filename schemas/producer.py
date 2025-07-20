@@ -14,7 +14,6 @@ class CropInput(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "id": 1,
                 "season": "2023/2024",
                 "name": "Soja"
             }
@@ -35,7 +34,6 @@ class FarmInput(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "id": 1,
                 "name": "Fazenda Santa Maria",
                 "city": "Ribeirão Preto",
                 "state": "SP",
@@ -43,7 +41,7 @@ class FarmInput(BaseModel):
                 "agricultural_area": 90.0,
                 "vegetation_area": 60.0,
                 "crops": [
-                    {"id": 1, "season": "2023/2024", "name": "Soja"},
+                    {"season": "2023/2024", "name": "Soja"},
                     {"season": "2022/2023", "name": "Milho"}
                 ]
             }
