@@ -7,10 +7,12 @@ API REST para cadastro, listagem, edição, exclusão e análise de produtores r
 - Python 3.13
 - FastAPI
 - PostgreSQL
-- Psycopg
+- Asyncpg
 - Pydantic
 - Docker / Docker Compose
 - Pytest
+- Poetry
+- Swagger
 
 ---
 
