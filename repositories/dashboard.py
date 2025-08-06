@@ -1,63 +1,65 @@
-from database.connection import get_connection
 import re
+from database.connection import get_connection
 
-def get_dashboard_data():
-    with get_connection() as conn:
-        with conn.cursor() as cur:
 
+async def get_dashboard_data():
+    conn = await get_connection()
+    try:
+        async with conn.transaction():
             # Total de fazendas
-            cur.execute("SELECT COUNT(*) FROM farms;")
-            total_farms = cur.fetchone()[0]
+            row = await conn.fetchrow("SELECT COUNT(*) FROM farms;")
+            total_farms = row["count"]
 
             # Total de hectares (área total)
-            cur.execute("SELECT COALESCE(SUM(total_area), 0) FROM farms;")
-            total_area = float(cur.fetchone()[0])
+            row = await conn.fetchrow("SELECT COALESCE(SUM(total_area), 0) FROM farms;")
+            total_area = float(row["coalesce"])
 
             # Fazendas por estado
-            cur.execute("""
+            rows = await conn.fetch("""
                 SELECT state, COUNT(*) 
                 FROM farms 
                 GROUP BY state;
             """)
-            by_state = {state: count for state, count in cur.fetchall()}
+            by_state = {row["state"]: row["count"] for row in rows}
 
             # Culturas por nome
-            cur.execute("""
+            rows = await conn.fetch("""
                 SELECT name, COUNT(*) 
                 FROM crops 
                 GROUP BY name;
             """)
-            by_crop = {name: count for name, count in cur.fetchall()}
+            by_crop = {row["name"]: row["count"] for row in rows}
 
-            # Culturas por safra
-            cur.execute("""
+            # Culturas por safra e nome
+            rows = await conn.fetch("""
                 SELECT season, name, COUNT(*) 
                 FROM crops 
                 GROUP BY season, name;
             """)
-            by_crop_season_raw = cur.fetchall()
             by_crop_season = {}
-            for season, name, count in by_crop_season_raw:
+            for row in rows:
+                season = row["season"]
+                name = row["name"]
+                count = row["count"]
                 if season not in by_crop_season:
                     by_crop_season[season] = {}
                 by_crop_season[season][name] = count
 
             # Uso do solo
-            cur.execute("""
+            row = await conn.fetchrow("""
                 SELECT 
-                    COALESCE(SUM(agricultural_area), 0), 
-                    COALESCE(SUM(vegetation_area), 0) 
+                    COALESCE(SUM(agricultural_area), 0) AS agri,
+                    COALESCE(SUM(vegetation_area), 0) AS veg
                 FROM farms;
             """)
-            agri_area, veg_area = cur.fetchone()
+            agri_area = row["agri"]
+            veg_area = row["veg"]
 
-            # Tipo de documento (CPF ou CNPJ)
-            cur.execute("SELECT document FROM producers;")
-            docs = cur.fetchall()
+            # Tipo de documento (CPF/CNPJ)
+            rows = await conn.fetch("SELECT document FROM producers;")
             by_document_type = {"CPF": 0, "CNPJ": 0}
-            for (doc,) in docs:
-                # CPF tem 11 dígitos, CNPJ tem 14
-                numeric = re.sub(r"\D", "", doc)
+            for row in rows:
+                numeric = re.sub(r"\D", "", row["document"])
                 if len(numeric) == 11:
                     by_document_type["CPF"] += 1
                 elif len(numeric) == 14:
@@ -75,3 +77,6 @@ def get_dashboard_data():
                 },
                 "by_document_type": by_document_type
             }
+
+    finally:
+        await conn.close()

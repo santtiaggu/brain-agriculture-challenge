@@ -4,275 +4,241 @@ from database.connection import get_connection
 from schemas.producer import ProducerInput
 from database.connection import get_connection
 
-def save_producer(data: ProducerInput):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            # Inserir produtor
-            cur.execute(
-                """
+async def save_producer(data: ProducerInput):
+    conn = await get_connection()
+    try:
+        async with conn.transaction():
+            row = await conn.fetchrow("""
                 INSERT INTO producers (document, name)
-                VALUES (%s, %s)
-                RETURNING id
-                """,
-                (data.document, data.name)
-            )
-            producer_id = cur.fetchone()[0]
+                VALUES ($1, $2)
+                RETURNING id;
+            """, data.document, data.name)
+            producer_id = row["id"]
 
-            for farm in data.farms:
-                cur.execute(
-                    """
+            for farm in data.farms or []:
+                row = await conn.fetchrow("""
                     INSERT INTO farms (producer_id, name, city, state, total_area, agricultural_area, vegetation_area)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id
-                    """,
-                    (
-                        producer_id,
-                        farm.name,
-                        farm.city,
-                        farm.state,
-                        farm.total_area,
-                        farm.agricultural_area,
-                        farm.vegetation_area
-                    )
-                )
-                farm_id = cur.fetchone()[0]
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    RETURNING id;
+                """, producer_id, farm.name, farm.city, farm.state,
+                     farm.total_area, farm.agricultural_area, farm.vegetation_area)
+                farm_id = row["id"]
 
-                for crop in farm.crops:
-                    cur.execute(
-                        """
+                for crop in farm.crops or []:
+                    await conn.execute("""
                         INSERT INTO crops (farm_id, season, name)
-                        VALUES (%s, %s, %s)
-                        """,
-                        (farm_id, crop.season, crop.name)
-                    )
-        conn.commit()
+                        VALUES ($1, $2, $3);
+                    """, farm_id, crop.season, crop.name)
+    finally:
+        await conn.close()
 
 
-def get_all_producers(page: int, size: int):
+async def get_all_producers(page: int, size: int):
     offset = (page - 1) * size
+    conn = await get_connection()
+    try:
+        total_row = await conn.fetchrow("SELECT COUNT(*) FROM producers;")
+        total = total_row["count"]
 
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            # Total de registros
-            cur.execute("SELECT COUNT(*) FROM producers;")
-            total = cur.fetchone()[0]
+        rows = await conn.fetch("""
+            SELECT id, name, document
+            FROM producers
+            ORDER BY id
+            LIMIT $1 OFFSET $2;
+        """, size, offset)
 
-            # Dados paginados
-            cur.execute("""
-                SELECT id, name, document
-                FROM producers
-                ORDER BY id
-                LIMIT %s OFFSET %s;
-            """, (size, offset))
+        producers = []
+        for row in rows:
+            producer_id = row["id"]
+            name = row["name"]
+            document = row["document"]
 
-            producers = []
-            for row in cur.fetchall():
-                producer_id, name, document = row
-
-                # Buscar fazendas associadas
-                cur.execute("""
-                    SELECT id, name, city, state, total_area, agricultural_area, vegetation_area
-                    FROM farms
-                    WHERE producer_id = %s;
-                """, (producer_id,))
-                farms = []
-                for farm_row in cur.fetchall():
-                    farm_id, farm_name, city, state, total_area, agri_area, veg_area = farm_row
-
-                    # Buscar culturas da fazenda (com id agora)
-                    cur.execute("""
-                        SELECT id, season, name
-                        FROM crops
-                        WHERE farm_id = %s;
-                    """, (farm_id,))
-                    crops = [
-                        {"id": crop_id, "season": season, "name": crop_name}
-                        for crop_id, season, crop_name in cur.fetchall()
-                    ]
-
-                    farms.append({
-                        "id": farm_id,
-                        "name": farm_name,
-                        "city": city,
-                        "state": state,
-                        "total_area": float(total_area),
-                        "agricultural_area": float(agri_area),
-                        "vegetation_area": float(veg_area),
-                        "crops": crops
-                    })
-
-                producers.append({
-                    "id": producer_id,
-                    "name": name,
-                    "document": document,
-                    "farms": farms
-                })
-
-    return {
-        "total": total,
-        "page": page,
-        "size": size,
-        "producers": producers
-    }
-
-
-def get_producer_by_id(producer_id: int):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT id, name, document FROM producers WHERE id = %s
-            """, (producer_id,))
-            row = cur.fetchone()
-            if not row:
-                return None
-
-            producer_id, name, document = row
-
-            # Buscar fazendas
-            cur.execute("""
+            farms_data = await conn.fetch("""
                 SELECT id, name, city, state, total_area, agricultural_area, vegetation_area
                 FROM farms
-                WHERE producer_id = %s
-            """, (producer_id,))
-            farms = []
-            for farm_row in cur.fetchall():
-                farm_id, fname, city, state, total_area, agri_area, veg_area = farm_row
+                WHERE producer_id = $1;
+            """, producer_id)
 
-                # Buscar culturas da fazenda
-                cur.execute("""
-                    SELECT id, season, name FROM crops WHERE farm_id = %s
-                """, (farm_id,))
-                crops = [
-                    {"id": cid, "season": season, "name": crop_name}
-                    for cid, season, crop_name in cur.fetchall()
-                ]
+            farms = []
+            for farm in farms_data:
+                farm_id = farm["id"]
+
+                crops_data = await conn.fetch("""
+                    SELECT id, season, name
+                    FROM crops
+                    WHERE farm_id = $1;
+                """, farm_id)
+
+                crops = [{"id": c["id"], "season": c["season"], "name": c["name"]} for c in crops_data]
 
                 farms.append({
                     "id": farm_id,
-                    "name": fname,
-                    "city": city,
-                    "state": state,
-                    "total_area": float(total_area),
-                    "agricultural_area": float(agri_area),
-                    "vegetation_area": float(veg_area),
+                    "name": farm["name"],
+                    "city": farm["city"],
+                    "state": farm["state"],
+                    "total_area": float(farm["total_area"]),
+                    "agricultural_area": float(farm["agricultural_area"]),
+                    "vegetation_area": float(farm["vegetation_area"]),
                     "crops": crops
                 })
 
-            return {
+            producers.append({
                 "id": producer_id,
                 "name": name,
                 "document": document,
                 "farms": farms
-            }
+            })
+
+        return {
+            "total": total,
+            "page": page,
+            "size": size,
+            "producers": producers
+        }
+    finally:
+        await conn.close()
 
 
-def update_producer_in_db(producer_id: int, data: dict):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            # Verifica se o produtor existe antes de continuar
-            cur.execute("SELECT 1 FROM producers WHERE id = %s", (producer_id,))
-            if cur.fetchone() is None:
+async def get_producer_by_id(producer_id: int):
+    conn = await get_connection()
+    try:
+        row = await conn.fetchrow("SELECT id, name, document FROM producers WHERE id = $1", producer_id)
+        if not row:
+            return None
+
+        producer_id = row["id"]
+        name = row["name"]
+        document = row["document"]
+
+        farms_data = await conn.fetch("""
+            SELECT id, name, city, state, total_area, agricultural_area, vegetation_area
+            FROM farms
+            WHERE producer_id = $1;
+        """, producer_id)
+
+        farms = []
+        for farm in farms_data:
+            farm_id = farm["id"]
+            crops_data = await conn.fetch("""
+                SELECT id, season, name
+                FROM crops
+                WHERE farm_id = $1;
+            """, farm_id)
+
+            crops = [{"id": c["id"], "season": c["season"], "name": c["name"]} for c in crops_data]
+
+            farms.append({
+                "id": farm_id,
+                "name": farm["name"],
+                "city": farm["city"],
+                "state": farm["state"],
+                "total_area": float(farm["total_area"]),
+                "agricultural_area": float(farm["agricultural_area"]),
+                "vegetation_area": float(farm["vegetation_area"]),
+                "crops": crops
+            })
+
+        return {
+            "id": producer_id,
+            "name": name,
+            "document": document,
+            "farms": farms
+        }
+    finally:
+        await conn.close()
+
+
+async def update_producer_in_db(producer_id: int, data: ProducerInput):
+    conn = await get_connection()
+    try:
+        async with conn.transaction():
+            exists = await conn.fetchval("SELECT 1 FROM producers WHERE id = $1", producer_id)
+            if not exists:
                 raise HTTPException(status_code=404, detail="Producer not found")
 
-            # Atualizar nome e documento do produtor
-            cur.execute("""
-                UPDATE producers SET name = %s, document = %s WHERE id = %s;
-            """, (data.name, data.document, producer_id))
+            await conn.execute("""
+                UPDATE producers SET name = $1, document = $2 WHERE id = $3
+            """, data.name, data.document, producer_id)
 
-            # Buscar todas as fazendas atuais
-            cur.execute("SELECT id FROM farms WHERE producer_id = %s;", (producer_id,))
-            existing_farm_ids = {row[0] for row in cur.fetchall()}
-            received_farm_ids = {farm.id for farm in data.farms if farm.id is not None}
+            # Fazendas existentes no banco
+            existing_farms = await conn.fetch("SELECT id FROM farms WHERE producer_id = $1", producer_id)
+            existing_farm_ids = {row["id"] for row in existing_farms}
+            received_farm_ids = {farm.id for farm in data.farms or [] if farm.id is not None}
 
-            # Deletar fazendas que não estão no payload
-            farms_to_delete = existing_farm_ids - received_farm_ids
+            farms_to_delete = list(existing_farm_ids - received_farm_ids)
             if farms_to_delete:
-                cur.execute("DELETE FROM crops WHERE farm_id = ANY(%s);", (list(farms_to_delete),))
-                cur.execute("DELETE FROM farms WHERE id = ANY(%s);", (list(farms_to_delete),))
+                await conn.execute("DELETE FROM crops WHERE farm_id = ANY($1)", farms_to_delete)
+                await conn.execute("DELETE FROM farms WHERE id = ANY($1)", farms_to_delete)
 
-            for farm in data.farms:
+            for farm in data.farms or []:
                 if farm.id and farm.id in existing_farm_ids:
-                    # UPDATE farm existente
-                    cur.execute("""
-                        UPDATE farms SET name = %s, city = %s, state = %s,
-                            total_area = %s, agricultural_area = %s, vegetation_area = %s
-                        WHERE id = %s;
-                    """, (
-                        farm.name, farm.city, farm.state,
-                        farm.total_area, farm.agricultural_area, farm.vegetation_area,
-                        farm.id
-                    ))
+                    await conn.execute("""
+                        UPDATE farms SET name = $1, city = $2, state = $3,
+                            total_area = $4, agricultural_area = $5, vegetation_area = $6
+                        WHERE id = $7
+                    """, farm.name, farm.city, farm.state,
+                         farm.total_area, farm.agricultural_area, farm.vegetation_area,
+                         farm.id)
 
+                    # Atualizar ou inserir culturas
                     farm_id = farm.id
-
-                    # Atualizar crops
-                    cur.execute("SELECT id FROM crops WHERE farm_id = %s;", (farm_id,))
-                    existing_crop_ids = {row[0] for row in cur.fetchall()}
+                    existing_crops = await conn.fetch("SELECT id FROM crops WHERE farm_id = $1", farm_id)
+                    existing_crop_ids = {row["id"] for row in existing_crops}
                     received_crop_ids = {crop.id for crop in farm.crops if crop.id is not None}
 
-                    crops_to_delete = existing_crop_ids - received_crop_ids
+                    crops_to_delete = list(existing_crop_ids - received_crop_ids)
                     if crops_to_delete:
-                        cur.execute("DELETE FROM crops WHERE id = ANY(%s);", (list(crops_to_delete),))
+                        await conn.execute("DELETE FROM crops WHERE id = ANY($1)", crops_to_delete)
 
                     for crop in farm.crops:
                         if crop.id and crop.id in existing_crop_ids:
-                            cur.execute("""
-                                UPDATE crops SET season = %s, name = %s WHERE id = %s;
-                            """, (crop.season, crop.name, crop.id))
+                            await conn.execute("""
+                                UPDATE crops SET season = $1, name = $2 WHERE id = $3
+                            """, crop.season, crop.name, crop.id)
                         else:
-                            cur.execute("""
+                            await conn.execute("""
                                 INSERT INTO crops (farm_id, season, name)
-                                VALUES (%s, %s, %s);
-                            """, (farm_id, crop.season, crop.name))
+                                VALUES ($1, $2, $3)
+                            """, farm_id, crop.season, crop.name)
 
                 else:
-                    # Inserir nova farm
-                    cur.execute("""
+                    # Inserir nova fazenda
+                    result = await conn.fetchrow("""
                         INSERT INTO farms (producer_id, name, city, state, total_area, agricultural_area, vegetation_area)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id;
-                    """, (
-                        producer_id, farm.name, farm.city, farm.state,
-                        farm.total_area, farm.agricultural_area, farm.vegetation_area
-                    ))
-                    farm_id = cur.fetchone()[0]
+                        VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        RETURNING id
+                    """, producer_id, farm.name, farm.city, farm.state,
+                         farm.total_area, farm.agricultural_area, farm.vegetation_area)
+                    farm_id = result["id"]
 
                     for crop in farm.crops:
-                        cur.execute("""
+                        await conn.execute("""
                             INSERT INTO crops (farm_id, season, name)
-                            VALUES (%s, %s, %s);
-                        """, (farm_id, crop.season, crop.name))
+                            VALUES ($1, $2, $3)
+                        """, farm_id, crop.season, crop.name)
 
-            conn.commit()
-
-    return JSONResponse(
-        status_code=200,
-        content={"message": "Producer updated successfully"}
-    )
+        return JSONResponse(status_code=200, content={"message": "Producer updated successfully"})
+    finally:
+        await conn.close()
 
 
-def delete_producer_from_db(producer_id: int):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            # Verifica se o produtor existe
-            cur.execute("SELECT 1 FROM producers WHERE id = %s", (producer_id,))
-            if cur.fetchone() is None:
+async def delete_producer_from_db(producer_id: int):
+    conn = await get_connection()
+    try:
+        async with conn.transaction():
+            exists = await conn.fetchval("SELECT 1 FROM producers WHERE id = $1", producer_id)
+            if not exists:
                 raise HTTPException(status_code=404, detail="Producer not found")
 
-            # Buscar farms do produtor
-            cur.execute("SELECT id FROM farms WHERE producer_id = %s", (producer_id,))
-            farm_ids = [row[0] for row in cur.fetchall()]
+            farm_ids = await conn.fetch("SELECT id FROM farms WHERE producer_id = $1", producer_id)
+            farm_ids = [row["id"] for row in farm_ids]
 
-            # Deletar crops
             if farm_ids:
-                cur.execute("DELETE FROM crops WHERE farm_id = ANY(%s);", (farm_ids,))
-                cur.execute("DELETE FROM farms WHERE id = ANY(%s);", (farm_ids,))
+                await conn.execute("DELETE FROM crops WHERE farm_id = ANY($1)", farm_ids)
+                await conn.execute("DELETE FROM farms WHERE id = ANY($1)", farm_ids)
 
-            # Deletar producer
-            cur.execute("DELETE FROM producers WHERE id = %s;", (producer_id,))
-            conn.commit()
+            await conn.execute("DELETE FROM producers WHERE id = $1", producer_id)
 
-    return JSONResponse(
-        status_code=200,
-        content={"message": "Producer deleted successfully"}
-    )
+        return JSONResponse(status_code=200, content={"message": "Producer deleted successfully"})
+    finally:
+        await conn.close()

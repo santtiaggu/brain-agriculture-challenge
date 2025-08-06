@@ -1,5 +1,8 @@
-import psycopg
+import asyncpg
 import os
+from dotenv import load_dotenv
 
-def get_connection():
-    return psycopg.connect(os.getenv("DATABASE_URL"))
+load_dotenv()
+
+async def get_connection():
+    return await asyncpg.connect(os.getenv("DATABASE_URL"))
