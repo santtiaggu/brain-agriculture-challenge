@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 load_dotenv()
 
-from routers import health, producer, dashboard
+from routers import health, auth, producer, dashboard 
 
 app = FastAPI()
 
@@ -22,8 +22,10 @@ app.add_middleware(
 )
 
 app.include_router(health.router, prefix="/api/health")
+app.include_router(auth.router, prefix="/api")
 app.include_router(producer.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+
 
 
 if __name__ == '__main__':

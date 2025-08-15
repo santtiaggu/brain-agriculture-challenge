@@ -2,7 +2,6 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from database.connection import get_connection
 from schemas.producer import ProducerInput
-from database.connection import get_connection
 
 async def save_producer(data: ProducerInput):
     conn = await get_connection()
