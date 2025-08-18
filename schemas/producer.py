@@ -12,12 +12,7 @@ class CropInput(BaseModel):
     name: str
 
     model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "season": "2023/2024",
-                "name": "Soja"
-            }
-        }
+        json_schema_extra={"example": {"season": "2023/2024", "name": "Soja"}}
     )
 
 
@@ -42,8 +37,8 @@ class FarmInput(BaseModel):
                 "vegetation_area": 60.0,
                 "crops": [
                     {"season": "2023/2024", "name": "Soja"},
-                    {"season": "2022/2023", "name": "Milho"}
-                ]
+                    {"season": "2022/2023", "name": "Milho"},
+                ],
             }
         }
     )
@@ -73,7 +68,7 @@ class ProducerInput(BaseModel):
                             {"season": "2022/2023", "name": "Milho"},
                         ],
                     }
-                ]
+                ],
             }
         }
     )
@@ -81,7 +76,7 @@ class ProducerInput(BaseModel):
     @field_validator("document")
     @classmethod
     def validate_document(cls, v: str) -> str:
-        digits = ''.join(filter(str.isdigit, v))
+        digits = "".join(filter(str.isdigit, v))
         if len(digits) == 11:
             if not cpf_validator.validate(digits):
                 raise ValueError("CPF inválido")

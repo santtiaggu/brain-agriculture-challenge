@@ -9,6 +9,9 @@ API REST para cadastro, listagem, edição, exclusão e análise de produtores r
 - PostgreSQL
 - Asyncpg
 - Pydantic
+- OAuth2
+- PyJWT
+- Alembic
 - Docker / Docker Compose
 - Pytest
 - Poetry
@@ -47,6 +50,15 @@ poetry install
 ```bash
 poe start
 ```
+
+## Usuário de teste auth
+
+```json
+{
+  "email": "gustavo.santiago@gmail.com",
+  "password": "santiago"
+}
+``` 
 
 ## 🐘 Como rodar com Docker
 
