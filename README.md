@@ -112,6 +112,7 @@ Crie um arquivo `.env` na raiz com:
 
 ```env
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/brain_agriculture
+JWT_SECRET=81b4a8baac72e08759a54adc32186c00bedfb7e0f688cfe4260a89819835999e
 ```
 
 > A URL será automaticamente usada tanto em local quanto no container (definido em `docker-compose.yml`).
